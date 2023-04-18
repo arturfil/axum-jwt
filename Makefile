@@ -1,3 +1,6 @@
+DB_DOCKER_CONTAINER=axum_postgres
+DB_NAME=axum_jwt_db
+
 install:
 	cargo add axum
 	cargo add axum-extra -F cookie

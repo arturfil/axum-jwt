@@ -1,6 +1,7 @@
 DB_DOCKER_CONTAINER=axum_postgres
 DB_NAME=axum_jwt_db
 
+
 install:
 	cargo add axum
 	cargo add axum-extra -F cookie
@@ -17,6 +18,14 @@ install:
 	cargo add argon2
 	cargo add rand_core --features "std"
 
+create_migrations:
+	sqlx migrate add -r init
+
+migrate-up:
+	asdfasd
+
+migrate-down:
+	asdfasdf
 
 stop_containers:
 	@echo "Stopping all docker containers..."

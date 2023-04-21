@@ -1,12 +1,13 @@
 mod config;
-
+mod models; 
 
 use redis::Client;
 use std::sync::Arc;
 use axum::{Json, response::IntoResponse, Router, routing::get};
-use config::Config;
 use dotenv::dotenv;
 use sqlx::{Postgres, Pool, postgres::PgPoolOptions};
+use crate::config::config::Config;
+
 
 pub struct AppState {
     db: Pool<Postgres>,
@@ -26,7 +27,7 @@ async fn main() {
         .await
     {
         Ok(pool) => {
-            print!("✅ Connection to the database is successful!");
+            println!("✅ Connection to the database is successful!");
             pool
         }
         Err(err) => {
@@ -37,7 +38,8 @@ async fn main() {
 
     let redis_client = match Client::open(config.redis_url.to_owned()) {
         Ok(client) => {
-            println!("✅ Connection to redis is successful!")
+            println!("✅ Connection to redis is successful!");
+            client
         }
         Err(e) => {
             println!("🔥 Error connecting to Redis: {}", e);

@@ -1,14 +1,18 @@
 mod config;
 mod models; 
+<<<<<<< HEAD
 mod handlers;
+=======
+mod controllers;
+>>>>>>> b2d7a61c9af80fbc162fdac11000f07b5b04dc50
 
 use redis::Client;
 use std::sync::Arc;
-use axum::{Json, response::IntoResponse, Router, routing::get};
+use axum::{Router, routing::{get}};
 use dotenv::dotenv;
 use sqlx::{Postgres, Pool, postgres::PgPoolOptions};
 use crate::config::config::Config;
-
+use crate::controllers::health_checker::health_checker_handler;
 
 pub struct AppState {
     db: Pool<Postgres>,
@@ -63,14 +67,5 @@ async fn main() {
         .unwrap();
 }
 
-pub async fn health_checker_handler() -> impl IntoResponse {
-    const MESSAGE: &str = "Rust and Axum Framework: JWT Access and Refresh Tokens";
 
-    let json_response = serde_json::json!({
-        "status": "success",
-        "message": MESSAGE
-    });
-
-    Json(json_response)
-}
 

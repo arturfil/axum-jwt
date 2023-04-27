@@ -1,5 +1,6 @@
 mod config;
 mod models; 
+mod handlers;
 
 use redis::Client;
 use std::sync::Arc;

@@ -1,10 +1,8 @@
 mod config;
 mod models; 
-<<<<<<< HEAD
 mod handlers;
-=======
 mod controllers;
->>>>>>> b2d7a61c9af80fbc162fdac11000f07b5b04dc50
+mod helpers;
 
 use redis::Client;
 use std::sync::Arc;

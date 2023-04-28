@@ -22,11 +22,11 @@ create_migrations:
 	sqlx migrate add -r init
 
 migrate-up:
-	asdfasd
+	sqlx migrate run	
 
 migrate-down:
-	asdfasdf
-
+	sqlx migrate revert
+	
 stop_containers:
 	@echo "Stopping all docker containers..."
 	if [ $$(docker ps -q) ]; then \

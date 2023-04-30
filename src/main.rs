@@ -3,10 +3,12 @@ mod models;
 mod handlers;
 mod controllers;
 mod helpers;
+mod middleware;
 
 use redis::Client;
+use tower_http::cors::CorsLayer;
 use std::sync::Arc;
-use axum::{Router, routing::{get}};
+use axum::{Router, routing::{get}, http::{HeaderValue, Method, header::{CONTENT_TYPE, AUTHORIZATION, ACCEPT}}};
 use dotenv::dotenv;
 use sqlx::{Postgres, Pool, postgres::PgPoolOptions};
 use crate::config::config::Config;
@@ -15,7 +17,6 @@ use crate::controllers::health_checker::health_checker_handler;
 pub struct AppState {
     db: Pool<Postgres>,
     env: Config,
-    redis_client: Client,
 }
 
 #[tokio::main]
@@ -39,23 +40,17 @@ async fn main() {
         }
     };
 
-    let redis_client = match Client::open(config.redis_url.to_owned()) {
-        Ok(client) => {
-            println!("✅ Connection to redis is successful!");
-            client
-        }
-        Err(e) => {
-            println!("🔥 Error connecting to Redis: {}", e);
-            std::process::exit(1);
-        }
-    };
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
+        .allow_credentials(true)
+        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
     let app = Router::new()
         .route("/api/healthchecker", get(health_checker_handler))
         .with_state(Arc::new(AppState {
             db: pool.clone(),
             env: config.clone(),
-            redis_client: redis_client.clone(),
         }));
 
     println!("🚀 Server started successfully");

@@ -1,3 +1,12 @@
+use std::sync::Arc;
+
+use axum::{http::{StatusCode, Request, header}, Json, extract::State, middleware::Next, response::IntoResponse};
+use axum_extra::extract::CookieJar;
+use jsonwebtoken::{DecodingKey, Validation, decode};
+use serde::{Serialize, Deserialize};
+
+use crate::{models::user::{User, TokenClaims}, AppState};
+
 
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {
@@ -10,22 +19,23 @@ pub async fn auth<B>(
     State(data): State<Arc<AppState>>,
     mut req: Request<B>,
     next: Next<B>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>) {
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     let token = cookie_jar
         .get("token")
         .map(|cookie| cookie.value().to_string())
         .or_else(|| {
-            req headers()
+            req.headers()
                 .get(header::AUTHORIZATION)
                 .and_then(|auth_header| auth_header.to_str().ok())
                 .and_then(|auth_value| {
-                    if auth_value.start_with("Bearer ") {
+                    if auth_value.starts_with("Bearer ") {
                         Some(auth_value[7..].to_owned())
                     } else {
                         None
                     }
                 })
         });
+
     let token = token.ok_or_else(|| {
         let json_error = ErrorResponse {
             status: "fail",
@@ -33,6 +43,7 @@ pub async fn auth<B>(
         };
         (StatusCode::UNAUTHORIZED, Json(json_error))
     })?;
+
     let claims = decode::<TokenClaims>(
         &token,
         &DecodingKey::from_secret(data.env.jwt_secret.as_ref()),
@@ -47,7 +58,7 @@ pub async fn auth<B>(
     })?
     .claims;
 
-    let user_id = uuid::Uuid::parse_str(&cliams.sub).map_err(|_| {
+    let user_id = uuid::Uuid::parse_str(&claims.sub).map_err(|_| {
         let json_error = ErrorResponse {
             status: "fail",
             message: "Invalid token".to_string(),
@@ -63,7 +74,7 @@ pub async fn auth<B>(
                 status: "fail",
                 message: format!("Error fetching user from database: {}", e),
             };
-            (StatusCOde::INTERNAL_SERVER_ERROR, Json(json_error))
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json_error))
         })?;
 
     let user = user.ok_or_else(|| {
@@ -76,4 +87,4 @@ pub async fn auth<B>(
 
     req.extensions_mut().insert(user);
     Ok(next.run(req).await)
-};
+}

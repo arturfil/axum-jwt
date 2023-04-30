@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use axum::{extract::State, Json, response::IntoResponse, http::{StatusCode, header, HeaderMap, Response}};
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher, PasswordVerifier, PasswordHash};
+use axum::{extract::State, Json, response::IntoResponse, http::{StatusCode, header, HeaderMap, Response}, Extension};
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use jsonwebtoken::{Header, EncodingKey, encode};
 use rand_core::OsRng;
 use serde_json::json;
 
-use crate::{AppState, models::{user::{RegisterUserSchema, User, LoginUserSchema}, response::FilteredUser, token::TokenDetails}, helpers::filter_user_record::filter_user_record};
+use crate::{ models::user::TokenClaims};
+use crate::{AppState, models::{user::{RegisterUserSchema, User, LoginUserSchema},  token::TokenDetails}, helpers::filter_user_record::filter_user_record};
 
 
 pub async fn register_user_handler(
@@ -77,10 +79,10 @@ pub async fn login_user_handler(
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let user = sqlx::query_as!(
         User,
-        "SELECT * FROM users WERE email = $1",
+        "SELECT * FROM users WHERE email = $1",
         body.email.to_ascii_lowercase()
     )
-    .fetch_option(&data.db)
+    .fetch_optional(&data.db)
     .await
     .map_err(|e| {
         let error_response = serde_json::json!({
@@ -92,7 +94,7 @@ pub async fn login_user_handler(
     .ok_or_else(|| {
         let error_response = serde_json::json!({
             "status": "fail",
-            "message": "Invalid email or passowrd",
+            "message": "Invalid email or password",
         });
         (StatusCode::BAD_REQUEST, Json(error_response))
     })?;
@@ -112,85 +114,60 @@ pub async fn login_user_handler(
         return Err((StatusCode::BAD_REQUEST, Json(error_response)));
     }
 
-    let access_token_details = generate_token(
-        user.id,
-        data.env.access_token_max_age,
-        data.env.access_token_private_key.to_owned(),
-    )?;
-    let refresh_token_detail = generate_token(
-        user.id,
-        data.env.refresh_token_max_age,
-        data.env.refresh_token_private_key.to_owned(),
-    )?;
+    let now = chrono::Utc::now();
+    let iat = now.timestamp() as usize;
+    let exp = (now + chrono::Duration::minutes(60)).timestamp() as usize;
+    let claims: TokenClaims = TokenClaims {
+        sub: user.id.to_string(),
+        exp,
+        iat,
+    };
 
-    save_token_data_to_redis(&data, &access_token_details, data.env.access_token_max_age).await?;
-    save_token_data_to_redis(&data, &refresh_token_detail, data.env.refresh_token_max_age).await?;
-
-    let access_cookie = Cookie::build(
-        "access_token",
-        access_token_details.token.clone().unwrap_or_default(),
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(data.env.jwt_secret.as_ref()),
     )
-    .path("/")
-    .max_age(time::Duration::minutes(data.env.access_token_max_age * 60))
-    .same_site(SameSite::Lax)
-    .http_only(true)
-    .finish();
+    .unwrap();
 
-    let refresh_cookie = Cookie::build(
-        "refresh_token",
-        refresh_token_detail.token.unwrap_or_default(),
-    )
-    .path("/")
-    .max_age(time::Duration::minutes(data.env.refresh_token_max_age * 60))
-    .same_site(SameSite::Lax)
-    .http_only(true)
-    .finish();
-
-    let logged_in_cookie = Cookie::build("logged_in", "true")
+    let cookie = Cookie::build("token", token.to_owned())
         .path("/")
-        .max_age(time::Duration::minutes(data.env.access_token_max_age * 60))
+        .max_age(time::Duration::hours(1))
         .same_site(SameSite::Lax)
-        .http_only(false)
+        .http_only(true)
         .finish();
-    
-    let mut response = Response::new(
-        json!({"status": "success", "access_token": access_token_details.token.unwrap()})
-            .to_string(),
-    );
-    let mut headers = HeaderMap::new();
-    headers.append(
-        header::SET_COOKIE,
-        access_cookie.to_string().parse().unwrap(),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        refresh_cookie.to_string().parse().unwrap(),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        logged_in_cookie.to_string().parse().unwrap(),
-    );
 
-    response.headers_mut().extend(headers);
+    let mut response = Response::new(json!({"status": "success", "token": token}).to_string());
+    response
+        .headers_mut()
+        .insert(header::SET_COOKIE, cookie.to_string().parse().unwrap());
     Ok(response)
 }
 
+pub async fn logout_handler() -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let cookie = Cookie::build("token", "")
+        .path("/")
+        .max_age(time::Duration::hours(-1))
+        .same_site(SameSite::Lax)
+        .http_only(true)
+        .finish();
 
-async fn save_token_data_to_redis(
-    data: &Arc<AppState>,
-    token_details: &TokenDetails,
-    max_age: i64,
-) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
-    let mut redis_client = data
-        .redis_client
-        .get_async_connection()
-        .await
-        .map_err(|e| {
-            let error_response = serde_json::json!({
-                "status": "error",
-                "message": format!("{}", e),
-            });
-            (StatusCode::UNPROCESSABLE_ENTITY, Json(error_response))
-        })?;
-    Ok(())
+    let mut response = Response::new(json!({"status": "success"}).to_string());
+    response
+        .headers_mut()
+        .insert(header::SET_COOKIE, cookie.to_string().parse().unwrap());
+    Ok(response)
 }
+
+pub async fn get_me_handler(
+    Extension(user): Extension<User>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let json_response = serde_json::json!({
+        "status": "success",
+        "data": serde_json::json!({
+            "user": filter_user_record(&user)
+        })
+    });
+    Ok(Json(json_response))
+}
+

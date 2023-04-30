@@ -137,11 +137,12 @@ pub async fn login_user_handler(
         .http_only(true)
         .finish();
 
-    let mut response = Response::new(json!({"status": "success", "token": token}).to_string());
+    let mut response = Response::new(serde_json::json!({"status": "success", "token": token}).to_string());
     response
         .headers_mut()
         .insert(header::SET_COOKIE, cookie.to_string().parse().unwrap());
-    Ok(response)
+    let token_response = json!({"status": "success", "token": token.to_string()});
+    Ok(Json(token_response))
 }
 
 pub async fn logout_handler() -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {

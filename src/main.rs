@@ -5,14 +5,14 @@ mod controllers;
 mod helpers;
 mod middleware;
 
-use redis::Client;
+
 use tower_http::cors::CorsLayer;
 use std::sync::Arc;
-use axum::{Router, routing::{get}, http::{HeaderValue, Method, header::{CONTENT_TYPE, AUTHORIZATION, ACCEPT}}};
+use axum::{ http::{HeaderValue, Method, header::{CONTENT_TYPE, AUTHORIZATION, ACCEPT}}};
 use dotenv::dotenv;
 use sqlx::{Postgres, Pool, postgres::PgPoolOptions};
+use controllers::auth::create_router;
 use crate::config::config::Config;
-use crate::controllers::health_checker::health_checker_handler;
 
 pub struct AppState {
     db: Pool<Postgres>,
@@ -46,12 +46,11 @@ async fn main() {
         .allow_credentials(true)
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
-    let app = Router::new()
-        .route("/api/healthchecker", get(health_checker_handler))
-        .with_state(Arc::new(AppState {
-            db: pool.clone(),
-            env: config.clone(),
-        }));
+    let app = create_router(Arc::new(AppState {
+        db: pool.clone(),
+        env: config.clone(),
+    }))
+    .layer(cors);
 
     println!("🚀 Server started successfully");
     axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())

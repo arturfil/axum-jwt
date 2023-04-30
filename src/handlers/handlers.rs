@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher, PasswordVerifier, PasswordHash};
-use axum::{extract::State, Json, response::IntoResponse, http::{StatusCode, header, HeaderMap, Response}, Extension};
+use axum::{extract::State, Json, response::IntoResponse, http::{StatusCode, header, Response}, Extension};
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use jsonwebtoken::{Header, EncodingKey, encode};
 use rand_core::OsRng;
 use serde_json::json;
 
 use crate::{ models::user::TokenClaims};
-use crate::{AppState, models::{user::{RegisterUserSchema, User, LoginUserSchema},  token::TokenDetails}, helpers::filter_user_record::filter_user_record};
+use crate::{AppState, models::{user::{RegisterUserSchema, User, LoginUserSchema}}, helpers::filter_user_record::filter_user_record};
 
 
 pub async fn register_user_handler(

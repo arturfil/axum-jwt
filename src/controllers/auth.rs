@@ -7,8 +7,8 @@ use crate::{handlers::handlers::{register_user_handler, login_user_handler, logo
 
 pub fn create_router(app_state: Arc<AppState>) -> Router {
     Router::new()
-        .route("/api/register", post(register_user_handler))
-        .route("/api/login", post(login_user_handler))
+        .route("/api/auth/register", post(register_user_handler))
+        .route("/api/auth/login", post(login_user_handler))
         .route("/api/auth/logout",
             get(logout_handler)
                 .route_layer(middleware::from_fn_with_state(app_state.clone(), auth))
@@ -17,5 +17,4 @@ pub fn create_router(app_state: Arc<AppState>) -> Router {
                .route_layer(middleware::from_fn_with_state(app_state.clone(), auth)),
        )
         .with_state(app_state)
-            
 }

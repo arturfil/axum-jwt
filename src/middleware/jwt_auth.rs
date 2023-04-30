@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{http::{StatusCode, Request, header}, Json, extract::State, middleware::Next, response::IntoResponse};
 use axum_extra::extract::CookieJar;
 use jsonwebtoken::{DecodingKey, Validation, decode};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize};
 
 use crate::{models::user::{User, TokenClaims}, AppState};
 
